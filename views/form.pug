@@ -5,10 +5,10 @@ html(lang="en")
     meta(charset='utf-8')
     link(rel="stylesheet", href="/static/main.css")
   body
-    h1 Upload text to a blob
+    h1 Upload
     form#upload-form
       label(for="blobId") Blob name
-      input#blobId(type="text", name="blobId", placeholder="example.json", required)
+      input#blobId(type="text", name="blobId", placeholder="username/example.json", required)
       br
       textarea#text(name="text", rows="10", cols="60", required)
       br
@@ -31,7 +31,7 @@ html(lang="en")
         xhr.setRequestHeader('Content-Type', 'application/json');
         xhr.onload = () => {
           if (xhr.status >= 200 && xhr.status < 300) {
-            result.textContent = 'OK: ' + xhr.responseText;
+            result.innerHTML = 'OK: ' + xhr.responseText;
           } else {
             result.textContent = 'Error ' + xhr.status + ': ' + xhr.responseText;
           }

@@ -1,42 +1,17 @@
-// Copyright 2016 Google LLC
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
 'use strict';
-
-const process = require('process'); // Required to mock environment variables
 
 const {loadEnvFile} = require('node:process');
 loadEnvFile();
 
-// [START gae_storage_app]
 const {format} = require('util');
 const express = require('express');
 
-// By default, the client will authenticate using the service account file
-// specified by the GOOGLE_APPLICATION_CREDENTIALS environment variable and use
-// the project specified by the GOOGLE_CLOUD_PROJECT environment variable. See
-// https://github.com/GoogleCloudPlatform/google-cloud-node/blob/master/docs/authentication.md
-// These environment variables are set automatically on Google App Engine
 const {Storage} = require('@google-cloud/storage');
-
-// Instantiate a storage client
 const storage = new Storage();
 
 const app = express();
 app.set('view engine', 'pug');
 
-// This middleware is available in Express v4.16.0 onwards
 app.use(express.json());
 
 // Allow any domain CORS
@@ -51,12 +26,12 @@ app.use(function(req, res, next) {
 // A bucket is a container for objects (files).
 const bucket = storage.bucket(process.env.GCLOUD_STORAGE_BUCKET);
 
-// Display a form for uploading files.
+// Display a form for uploading JSON
 app.get('/', (req, res) => {
   res.render('form.pug');
 });
 
-// Process the file upload and upload to Google Cloud Storage.
+// Pass the upload to Google Cloud Storage.
 app.post('/upload/:blobId', (req, res, next) => {
   if (!req.body) {
     res.status(400).send('No data uploaded.');
@@ -76,13 +51,34 @@ app.post('/upload/:blobId', (req, res, next) => {
 
   blobStream.on('finish', () => {
     // The public URL can be used to directly access the file via HTTP.
-    const publicUrl = format(
-      `https://storage.googleapis.com/${bucket.name}/${blob.name}`
-    );
-    res.status(200).send(publicUrl);
+    const localUrl = `/read/${blob.name}`;
+    const publicUrl = `https://storage.googleapis.com/${bucket.name}/${blob.name}`;
+    var html = `<ul>
+    <li>Local: <a href="${localUrl}">${localUrl}</a>
+    <li>Public: <a href="${publicUrl}">${publicUrl}</a>
+    </ul>`;
+    res.status(200).send(html);
   });
 
   blobStream.end(JSON.stringify(req.body));
+});
+
+// Read a blob from the bucket and return it as JSON.
+app.get('/read/*', async (req, res, next) => {
+  try {
+    var path = req.path.substring(6);
+    const blob = bucket.file(path);
+    const [exists] = await blob.exists();
+    if (!exists) {
+      res.status(404).json({error: 'Blob not found'});
+      return;
+    }
+
+    const [contents] = await blob.download();
+    res.type('application/json').send(contents);
+  } catch (err) {
+    next(err);
+  }
 });
 
 const PORT = parseInt(process.env.PORT) || 8080;
@@ -92,6 +88,5 @@ if (require.main === module) {
     console.log('Press Ctrl+C to quit.');
   });
 }
-// [END gae_storage_app]
 
 module.exports = app;
