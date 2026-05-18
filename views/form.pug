@@ -1,0 +1,43 @@
+doctype html
+html(lang="en")
+  head
+    title Upload text to GCS
+    meta(charset='utf-8')
+    link(rel="stylesheet", href="/static/main.css")
+  body
+    h1 Upload text to a blob
+    form#upload-form
+      label(for="blobId") Blob name
+      input#blobId(type="text", name="blobId", placeholder="example.json", required)
+      br
+      textarea#text(name="text", rows="10", cols="60", required)
+      br
+      button(type="submit") Upload
+    pre#result
+    script.
+      const form = document.getElementById('upload-form');
+      const result = document.getElementById('result');
+
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const blobId = document.getElementById('blobId').value.trim();
+        const text = document.getElementById('text').value;
+        if (!blobId) return;
+
+        result.textContent = 'Uploading...';
+
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', '/upload/' + encodeURIComponent(blobId));
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            result.textContent = 'OK: ' + xhr.responseText;
+          } else {
+            result.textContent = 'Error ' + xhr.status + ': ' + xhr.responseText;
+          }
+        };
+        xhr.onerror = () => {
+          result.textContent = 'Network error';
+        };
+        xhr.send(JSON.stringify({text}));
+      });

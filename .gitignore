@@ -1,0 +1,4 @@
+node_modules/
+# Local dev stuff:
+.env
+tmp*
