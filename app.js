@@ -31,15 +31,28 @@ app.get('/', (req, res) => {
   res.render('form.pug');
 });
 
+// Encode a blob name as a URL path: percent-encode each segment, keep slashes.
+const encodeBlobPath = (name) => name.split('/').map(encodeURIComponent).join('/');
+
 // Pass the upload to Google Cloud Storage.
-app.post('/upload/:blobId', (req, res, next) => {
-  if (!req.body) {
-    res.status(400).send('No data uploaded.');
+// An empty body deletes the blob instead of overwriting it.
+app.post('/upload/*', async (req, res, next) => {
+  const blobId = req.params[0];
+  const isEmpty = !req.body || (typeof req.body === 'object' && Object.keys(req.body).length === 0);
+
+  if (isEmpty) {
+    try {
+      const blob = bucket.file(blobId);
+      await blob.delete({ignoreNotFound: true});
+      res.status(204).send("Empty POST, blob deleted");
+    } catch (err) {
+      next(err);
+    }
     return;
   }
 
   // Create a new blob in the bucket and upload the file data.
-  const blob = bucket.file(req.params.blobId);
+  const blob = bucket.file(blobId);
   const blobStream = blob.createWriteStream({
     resumable: false,
     contentType: "application/json"
@@ -51,8 +64,9 @@ app.post('/upload/:blobId', (req, res, next) => {
 
   blobStream.on('finish', () => {
     // The public URL can be used to directly access the file via HTTP.
-    const localUrl = `/read/${blob.name}`;
-    const publicUrl = `https://storage.googleapis.com/${bucket.name}/${blob.name}`;
+    const encodedName = encodeBlobPath(blob.name);
+    const localUrl = `/read/${encodedName}`;
+    const publicUrl = `https://storage.googleapis.com/${bucket.name}/${encodedName}`;
     var html = `<ul>
     <li>Local: <a href="${localUrl}">${localUrl}</a>
     <li>Public: <a href="${publicUrl}">${publicUrl}</a>
@@ -66,8 +80,7 @@ app.post('/upload/:blobId', (req, res, next) => {
 // Read a blob from the bucket and return it as JSON.
 app.get('/read/*', async (req, res, next) => {
   try {
-    var path = req.path.substring(6);
-    const blob = bucket.file(path);
+    const blob = bucket.file(req.params[0]);
     const [exists] = await blob.exists();
     if (!exists) {
       res.status(404).json({error: 'Blob not found'});
@@ -76,6 +89,22 @@ app.get('/read/*', async (req, res, next) => {
 
     const [contents] = await blob.download();
     res.type('application/json').send(contents);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Delete a blob from the bucket.
+app.delete('/delete/*', async (req, res, next) => {
+  try {
+    const blob = bucket.file(req.params[0]);
+    const [exists] = await blob.exists();
+    if (!exists) {
+      res.status(404).json({error: 'Blob not found'});
+      return;
+    }
+    await blob.delete();
+    res.status(204).send();
   } catch (err) {
     next(err);
   }

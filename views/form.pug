@@ -1,22 +1,29 @@
 doctype html
 html(lang="en")
   head
-    title Upload text to GCS
+    title MinniStoreMax
     meta(charset='utf-8')
-    link(rel="stylesheet", href="/static/main.css")
+    style.
+      * {
+        font-family: consolas
+      }
   body
     h1 Upload
     form#upload-form
-      label(for="blobId") Blob name
+      label(for="blobId") Blob name: 
       input#blobId(type="text", name="blobId", placeholder="username/example.json", required)
       br
-      textarea#text(name="text", rows="10", cols="60", required)
+      textarea#text(name="text", rows="10", cols="60")
       br
       button(type="submit") Upload
+      button#delete-btn(type="button") Delete
     pre#result
     script.
       const form = document.getElementById('upload-form');
       const result = document.getElementById('result');
+      const deleteBtn = document.getElementById('delete-btn');
+
+      const encodePath = (id) => id.split('/').map(encodeURIComponent).join('/');
 
       form.addEventListener('submit', (e) => {
         e.preventDefault();
@@ -27,7 +34,7 @@ html(lang="en")
         result.textContent = 'Uploading...';
 
         const xhr = new XMLHttpRequest();
-        xhr.open('POST', '/upload/' + encodeURIComponent(blobId));
+        xhr.open('POST', '/upload/' + encodePath(blobId));
         xhr.setRequestHeader('Content-Type', 'application/json');
         xhr.onload = () => {
           if (xhr.status >= 200 && xhr.status < 300) {
@@ -39,5 +46,29 @@ html(lang="en")
         xhr.onerror = () => {
           result.textContent = 'Network error';
         };
-        xhr.send(JSON.stringify({text}));
+        xhr.send(text);
+      });
+
+      deleteBtn.addEventListener('click', () => {
+        const blobId = document.getElementById('blobId').value.trim();
+        if (!blobId) return;
+        if (!confirm('Delete blob "' + blobId + '"?')) return;
+
+        result.textContent = 'Deleting...';
+
+        const xhr = new XMLHttpRequest();
+        xhr.open('DELETE', '/delete/' + encodePath(blobId));
+        xhr.onload = () => {
+          if (xhr.status === 204) {
+            result.textContent = 'Deleted: ' + blobId;
+          } else if (xhr.status === 404) {
+            result.textContent = 'Not found: ' + blobId;
+          } else {
+            result.textContent = 'Error ' + xhr.status + ': ' + xhr.responseText;
+          }
+        };
+        xhr.onerror = () => {
+          result.textContent = 'Network error';
+        };
+        xhr.send();
       });
