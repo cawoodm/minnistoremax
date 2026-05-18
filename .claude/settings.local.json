@@ -1,8 +1,12 @@
 {
   "permissions": {
     "allow": [
-      "Skill(superpowers:systematic-debugging)",
-      "Skill(superpowers:systematic-debugging:*)"
+      "Skill",
+      "Bash",
+      "PowerShell",
+      "Read",
+      "Write",
+      "Edit"
     ]
   }
 }

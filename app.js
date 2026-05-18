@@ -1,7 +1,7 @@
 'use strict';
 
 const {loadEnvFile} = require('node:process');
-loadEnvFile();
+try { loadEnvFile(); } catch { /* no .env in production — env comes from app.yaml */ }
 
 const {format} = require('util');
 const express = require('express');
