@@ -34,6 +34,11 @@ app.get('/', (req, res) => {
 // Encode a blob name as a URL path: percent-encode each segment, keep slashes.
 const encodeBlobPath = (name) => name.split('/').map(encodeURIComponent).join('/');
 
+const logAction = (action, blobId, size) => {
+  const sizeStr = size === undefined ? '-' : `${size}B`;
+  console.log(`[${action}] blobId=${blobId} size=${sizeStr}`);
+};
+
 // Pass the upload to Google Cloud Storage.
 // An empty body deletes the blob instead of overwriting it.
 app.post('/upload/*', async (req, res, next) => {
@@ -44,6 +49,7 @@ app.post('/upload/*', async (req, res, next) => {
     try {
       const blob = bucket.file(blobId);
       await blob.delete({ignoreNotFound: true});
+      logAction('delete', blobId);
       res.status(204).send("Empty POST, blob deleted");
     } catch (err) {
       next(err);
@@ -53,6 +59,8 @@ app.post('/upload/*', async (req, res, next) => {
 
   // Create a new blob in the bucket and upload the file data.
   const blob = bucket.file(blobId);
+  const payload = JSON.stringify(req.body);
+  const payloadSize = Buffer.byteLength(payload);
   const blobStream = blob.createWriteStream({
     resumable: false,
     contentType: "application/json"
@@ -63,6 +71,7 @@ app.post('/upload/*', async (req, res, next) => {
   });
 
   blobStream.on('finish', () => {
+    logAction('upload', blobId, payloadSize);
     // The public URL can be used to directly access the file via HTTP.
     const encodedName = encodeBlobPath(blob.name);
     const localUrl = `/read/${encodedName}`;
@@ -74,13 +83,14 @@ app.post('/upload/*', async (req, res, next) => {
     res.status(200).send(html);
   });
 
-  blobStream.end(JSON.stringify(req.body));
+  blobStream.end(payload);
 });
 
 // Read a blob from the bucket and return it as JSON.
 app.get('/read/*', async (req, res, next) => {
+  const blobId = req.params[0];
   try {
-    const blob = bucket.file(req.params[0]);
+    const blob = bucket.file(blobId);
     const [exists] = await blob.exists();
     if (!exists) {
       res.status(404).json({error: 'Blob not found'});
@@ -88,6 +98,7 @@ app.get('/read/*', async (req, res, next) => {
     }
 
     const [contents] = await blob.download();
+    logAction('read', blobId, contents.length);
     res.type('application/json').send(contents);
   } catch (err) {
     next(err);
@@ -96,14 +107,22 @@ app.get('/read/*', async (req, res, next) => {
 
 // Delete a blob from the bucket.
 app.delete('/delete/*', async (req, res, next) => {
+  const blobId = req.params[0];
   try {
-    const blob = bucket.file(req.params[0]);
-    const [exists] = await blob.exists();
-    if (!exists) {
-      res.status(404).json({error: 'Blob not found'});
-      return;
+    const blob = bucket.file(blobId);
+    let size;
+    try {
+      const [metadata] = await blob.getMetadata();
+      size = Number(metadata.size);
+    } catch (err) {
+      if (err.code === 404) {
+        res.status(404).json({error: 'Blob not found'});
+        return;
+      }
+      throw err;
     }
     await blob.delete();
+    logAction('delete', blobId, size);
     res.status(204).send();
   } catch (err) {
     next(err);
@@ -113,7 +132,7 @@ app.delete('/delete/*', async (req, res, next) => {
 const PORT = parseInt(process.env.PORT) || 8080;
 if (require.main === module) {
   app.listen(PORT, () => {
-    console.log(`App listening on port ${PORT}`);
+    console.log(`MinniStoreMax ready on http://localhost:${PORT}`);
     console.log('Press Ctrl+C to quit.');
   });
 }

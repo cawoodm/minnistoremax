@@ -1,5 +1,6 @@
 {
   "name": "minnistoremax",
+  "version": "0.0.5",
   "description": "All-purpose storage of JSON blobs",
   "scripts": {
     "dev": "nodemon app.js",
